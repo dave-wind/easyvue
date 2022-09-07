@@ -240,7 +240,16 @@
     }
 
     return options;
-  }
+  } // 如果是原生标签 返回true
+
+  var isReservedTag = function isReservedTag(tagName) {
+    var str = 'p,div,span,input,button';
+    var obj = {};
+    str.split(",").forEach(function (tag) {
+      obj[tag] = true;
+    });
+    return obj[tagName];
+  };
 
   /**
    * @Object.create 用来进行基于原型链的继承
@@ -793,14 +802,14 @@
   function compileToFunction(template) {
     console.log("compile", template); // 1.把html字符串 转为 ast语法树 
 
-    var root = parseHTML(template);
-    console.log('root---', root); // 2.把 ast语法树 生成最终的 render函数 就是字符串拼接(模版引擎)
+    var root = parseHTML(template); // console.log('root---', root)
+    // 2.把 ast语法树 生成最终的 render函数 就是字符串拼接(模版引擎)
     // <div id="app"><p>hello {{name}}</p> hello </div>
     // 将ast树,再次转化为 js语法 ,核心思路就是将模版转化为 下面字符串:
     // _c("div",{id:app},_c("p",undefined,_v('hello' + _s(name) )),_v('hello'))
 
-    var code = generate(root);
-    console.log("code--", code); // 所有 模版引擎实现: 都需要 new Function + with
+    var code = generate(root); // console.log("code--", code)
+    // 所有 模版引擎实现: 都需要 new Function + with
     // render 函数 返回的就是 虚拟dom  且 _c, _s _v 创建的都是一个个虚拟dom
 
     var renderFn = new Function("with(this){ return ".concat(code, "}"));
@@ -956,26 +965,47 @@
   // 渲染成真实dom
   function patch(oldVnode, vnode) {
     // 1.判断是更新还是渲染
-    // 因为虚拟节点是 没有 nodeType的
-    var isRealElement = oldVnode.nodeType;
+    if (!oldVnode) {
+      // 这个是组件的挂载
+      console.log("组件vnode---", vnode);
+      return createElm(vnode);
+    } else {
+      // 因为虚拟节点是 没有 nodeType的
+      var isRealElement = oldVnode.nodeType;
 
-    if (isRealElement) {
-      var oldElm = oldVnode; // app
+      if (isRealElement) {
+        var oldElm = oldVnode; // app
 
-      var parentElm = oldElm.parentNode; // body
+        var parentElm = oldElm.parentNode; // body
 
-      var el = creareElm(vnode);
-      parentElm.insertBefore(el, oldElm.nextSibling); // 紧跟app 组件之后,插入el
+        var el = createElm(vnode);
+        parentElm.insertBefore(el, oldElm.nextSibling); // 紧跟app 组件之后,插入el
 
-      parentElm.removeChild(oldElm); // 删除老的 app
-      // 需要将渲染好的dom 返回
+        parentElm.removeChild(oldElm); // 删除老的 app
+        // 需要将渲染好的dom 返回
 
-      return el;
+        return el;
+      }
+    }
+  }
+
+  function createComponent$1(vnode) {
+    // 创建组件的实例
+    var i = vnode.data;
+
+    if ((i = i.hook) && (i = i.init)) {
+      // 执行 组件内部自定义 声明周期
+      i(vnode);
+    }
+
+    if (vnode.componentInstance) {
+      return true;
     }
   } // 根据虚拟节点 创建 真实的 dom节点
   // 递归创建
 
-  function creareElm(vnode) {
+
+  function createElm(vnode) {
     var tag = vnode.tag,
         children = vnode.children;
         vnode.key;
@@ -983,14 +1013,19 @@
         var text = vnode.text;
 
     if (typeof tag == 'string') {
-      // 创建标签
+      // 实例化组件
+      if (createComponent$1(vnode)) {
+        return vnode.componentInstance.$el;
+      } // 创建标签
+
+
       vnode.el = document.createElement(tag); // 把属性 也展示到 dom页面效果上
 
       updateProperties(vnode); // 递归子节点
 
       children.forEach(function (child) {
         // 把子节点 一个个 塞到 父节点里;递归 调用
-        return vnode.el.appendChild(creareElm(child));
+        return vnode.el.appendChild(createElm(child));
       });
     } else {
       // 虚拟dom 映射真实dom 方便后续更新操作
@@ -1113,6 +1148,7 @@
 
         var render = compileToFunction(template); // 将template 转化为 render方法 vue1.0 是字符串正则  vue2.0 是虚拟dom
 
+        console.log("render------", render);
         options.render = render;
       } // options.render()
       // 渲染当前的组件,挂载这个组件
@@ -1125,20 +1161,59 @@
     Vue.prototype.$nextTick = nextTick;
   }
 
-  function createElement(tag) {
-    var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+  function createElement(vm, tag) {
+    var data = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    // ast -> render -> 调用
     var key = data.key;
 
     if (key) {
       delete data.key;
+    } // 原生标签的时候
+
+
+    for (var _len = arguments.length, children = new Array(_len > 3 ? _len - 3 : 0), _key = 3; _key < _len; _key++) {
+      children[_key - 3] = arguments[_key];
     }
 
-    for (var _len = arguments.length, children = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
-      children[_key - 2] = arguments[_key];
+    if (isReservedTag(tag)) {
+      return vnode(tag, data, key, children, undefined);
+    } else {
+      // 从vm 实例上 找到组件的定义 
+      // console.log("vm.$options.components--", vm.$options.components, tag)
+      var Ctor = vm.$options.components[tag];
+      console.log("组件----Ctor", Ctor);
+      return createComponent(vm, tag, data, key, children, Ctor);
     }
-
-    return vnode(tag, data, key, children, undefined);
   }
+
+  function createComponent(vm, tag, data, key, children, Ctor) {
+    // 如果传的是对象 需要 通过 extend 变成构造函数, 继承父组件方法和属性等
+    if (isObject(Ctor)) {
+      // 构建了当前组件这个类
+      Ctor = vm.$options._base.extend(Ctor);
+    } // 组件内部的生命周期
+
+
+    data.hook = {
+      init: function init(vnode) {
+        // 当前组件的实例, 虚拟节点上 componentInstance 表示的就是vue实例
+        var child = vnode.componentInstance = new Ctor({
+          _isComponent: true
+        }); // 组件的挂载 
+
+        child.$mount();
+      }
+    };
+    var componentObj = {
+      Ctor: Ctor,
+      // 组件的构造函数 方便子组件调用其他方法
+      children: children // 子组件children 是插槽
+
+    }; // 组件内部会自动调用 extend; 创建虚拟节点; 组件是没有孩子children的 只有插槽
+
+    return vnode("vue-component-".concat(Ctor.cid, "-").concat(tag), data, key, undefined, undefined, componentObj);
+  }
+
   function createTextNode(text) {
     return vnode(undefined, undefined, undefined, undefined, text);
   }
@@ -1149,16 +1224,19 @@
    * @param {*} key  diff key
    * @param {*} children  子节点
    * @param {*} text  文本
+   * @componentOptions 组件的options 
    * @return 专门产生虚拟节点
+   * 
    */
 
-  function vnode(tag, data, key, children, text) {
+  function vnode(tag, data, key, children, text, componentOptions) {
     return {
       tag: tag,
       data: data,
       key: key,
       children: children,
-      text: text
+      text: text,
+      componentOptions: componentOptions
     };
   }
   /**
@@ -1175,7 +1253,7 @@
     // _s  JSON.stringify
     // 所有实例都会 共用 原型上的方法
     Vue.prototype._c = function () {
-      return createElement.apply(void 0, arguments);
+      return createElement.apply(void 0, [this].concat(Array.prototype.slice.call(arguments)));
     };
 
     Vue.prototype._v = function (text) {
@@ -1232,22 +1310,31 @@
   function initExtend(Vue) {
     // 为什么要有子类和父类 new Vue (Vue构造函数)
     // 创造子类 继承与父类 扩展的时候都扩展到自己的属性上
+    var cid = 0;
+
     Vue.extend = function (extendOptions) {
       console.log('extendOptions--', extendOptions);
 
-      var Sub = function Vuecomponent() {
-        // 这里this 指向子组件; 子组件初始化, 但是子类 没有_init方法 
-        // 所以需要继承
+      var Sub = function Vuecomponent(options) {
+        // 这里this 指向子组件; 子组件初始化, 但是子类 没有_init方法,所以需要继承
         this._init(options);
-      }; // Object.create 实现继承;但有缺陷;会改变其构造函数
+      };
 
+      Sub.cid = cid++; // Object.create 实现继承;但有缺陷;会改变其构造函数
 
       Sub.prototype = Object.create(this.prototype); // 把 default prototype 唯一属性 constructor 指向 其本身;
 
-      Sub.prototype.constructor = Sub; // 合并options 方法
+      Sub.prototype.constructor = Sub; // 当前的options 与传递的options 合并 
 
+      console.log("this.options----", this.options);
       Sub.options = mergeOptions(this.options, extendOptions); // 子类继承父类;
       // 还可以拓展 mixin use ???
+      // if(Sub.options.props) {
+      //     initProps(Sub)
+      // }
+      // Sub.extend = Super.extend;
+      // Sub.mixin = Super.mixin
+      // Sub.use = Super.use
 
       return Sub;
     };

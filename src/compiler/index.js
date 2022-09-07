@@ -6,7 +6,7 @@ export function compileToFunction(template) {
     console.log("compile", template)
     // 1.把html字符串 转为 ast语法树 
     let root = parseHTML(template)
-    console.log('root---', root)
+    // console.log('root---', root)
 
 
 
@@ -17,7 +17,7 @@ export function compileToFunction(template) {
 
     let code = generate(root)
 
-    console.log("code--", code)
+    // console.log("code--", code)
 
     // 所有 模版引擎实现: 都需要 new Function + with
 

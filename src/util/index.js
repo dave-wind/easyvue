@@ -54,7 +54,7 @@ function mergeAssets(parentVal, childVal) {
             res[key] = childVal[key]
         }
     }
-    return res; 
+    return res;
 
 }
 // 所以全局组件 可以在任何地方用
@@ -118,4 +118,15 @@ export function mergeOptions(parent, child) {
 
     return options;
 
+}
+
+
+// 如果是原生标签 返回true
+export const isReservedTag = (tagName) => {
+    let str = 'p,div,span,input,button';
+    let obj = {}
+    str.split(",").forEach(tag => {
+        obj[tag] = true
+    })
+    return obj[tagName]
 }

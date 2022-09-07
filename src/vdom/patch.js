@@ -2,29 +2,59 @@
 export function patch(oldVnode, vnode) {
     // 1.判断是更新还是渲染
 
-    // 因为虚拟节点是 没有 nodeType的
-    const isRealElement = oldVnode.nodeType
+    if (!oldVnode) {
+        // 这个是组件的挂载
+        console.log("组件vnode---", vnode)
+        return createElm(vnode)
+    } else {
+        // 因为虚拟节点是 没有 nodeType的
+        const isRealElement = oldVnode.nodeType
 
-    if (isRealElement) {
-        const oldElm = oldVnode; // app
-        const parentElm = oldElm.parentNode // body
+        if (isRealElement) {
+            const oldElm = oldVnode; // app
+            const parentElm = oldElm.parentNode // body
 
-        let el = creareElm(vnode);
-        parentElm.insertBefore(el, oldElm.nextSibling) // 紧跟app 组件之后,插入el
+            let el = createElm(vnode);
+            parentElm.insertBefore(el, oldElm.nextSibling) // 紧跟app 组件之后,插入el
 
-        parentElm.removeChild(oldElm) // 删除老的 app
+            parentElm.removeChild(oldElm) // 删除老的 app
 
-        // 需要将渲染好的dom 返回
-        return el;
+            // 需要将渲染好的dom 返回
+            return el;
+        }
     }
- 
+
+
 
 }
+
+function createComponent(vnode) {
+    // 创建组件的实例
+    let i = vnode.data;
+    if ((i = i.hook) && (i = i.init)) {
+        // 执行 组件内部自定义 声明周期
+        i(vnode)
+    }
+    if (vnode.componentInstance) {
+        return true
+    }
+}
+
+
+
 // 根据虚拟节点 创建 真实的 dom节点
 // 递归创建
-function creareElm(vnode) {
+function createElm(vnode) {
     let { tag, children, key, data, text } = vnode;
     if (typeof tag == 'string') {
+
+
+        // 实例化组件
+        if (createComponent(vnode)) {
+            return vnode.componentInstance.$el;
+        }
+
+
         // 创建标签
         vnode.el = document.createElement(tag);
         // 把属性 也展示到 dom页面效果上
@@ -33,8 +63,9 @@ function creareElm(vnode) {
         // 递归子节点
         children.forEach(child => {
             // 把子节点 一个个 塞到 父节点里;递归 调用
-            return vnode.el.appendChild(creareElm(child))
+            return vnode.el.appendChild(createElm(child))
         })
+
     } else {
         // 虚拟dom 映射真实dom 方便后续更新操作
         vnode.el = document.createTextNode(text);

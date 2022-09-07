@@ -8,7 +8,8 @@ export function renderMixin(Vue) {
 
     // 所有实例都会 共用 原型上的方法
     Vue.prototype._c = function () {
-        return createElement(...arguments);
+
+        return createElement(this, ...arguments);
     }
 
     Vue.prototype._v = function (text) {
@@ -25,6 +26,6 @@ export function renderMixin(Vue) {
         const { render } = vm.$options;
 
 
-       return render.call(vm); // 去实例上 取值
+        return render.call(vm); // 去实例上 取值
     }
 }

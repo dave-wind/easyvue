@@ -148,12 +148,95 @@ Sub.prototype.constructor = Sub;
 
 
 
+1.组件声明
+Vue.component 会被注册成一个全局方法;调用也是全局组件;
+都会定义在 Vue.options 上
+原理:
+    0.首先他会把 Vue.component('',options)里的 options 内部 转变为构造函数; 使用 this.options._base.extend, 这里实例的_base 指的是统一的父类Vue,因为考虑可能组件也有VueComponent.component;目的是保证 子组件是继承Vue组件;在其拓展不会影响Vue
 
-1.Vue.extend:
+2.Vue.extend:
+    0.在内部声明VueComponent 子组件;目的是 内部初始化 调用 _this.init() 方法; 该方法从父组件而来所以需要继承
+        const Sub = function Vuecomponent(options) {
+            this._init(options)
+        }
+        Sub.prototype = Object.create(Vue.prototype)
+        Sub.prototype.constructor = Sub;
+        // 子类 options 与Vue.options 合并
+        // 一些方法 比如 component directive filter 子组件都会继承
+        Sub.options = mergeOptions(..) 
 
-实际上实现的是 子组件 对 父组件的 继承
+    1.更改组件合并策略:(子组件的options 采用了和生命周期类似的合并策略;)
+        如果不进行合并,可能子组件重名全局组件就会被覆盖;
+        解决:
+        function mergeAssets(parentVal, childVal) {
+        // 继承了父级 res.__proto__ = parentVal; 
+        const res = Object.create(parentVal); 
+            if (childVal) {
+                for (let key in childVal) {
+                    // 让组件 先找自己的局部组件,找不到根据原型链 网上找
+                    res[key] = childVal[key]
+                }
+            }
+            return res;
+        }
+        合并完 子组件先从自身找, 找不到 再根据 __proto__ 向上找;所以全局组件可以在任何地方调用
 
-Sub.prototype = Object.create(Vue.prototype)
-Sub.prototype.constructor = Sub;
+3.组件渲染:
+
+    1.render 方法里去渲染组件需要特殊判断,原先是只渲染原生标签
+    在createElement方法中 先判断非原生标签 需要去找到组件的定义,通过构造函数 去创建组件 生成虚拟节点
+
+    function createElement(vm, tag, data = {}, ...children) {
+
+        if(原生组件) {
+            return vnode(xxx)
+        }else {
+            // vm是实例,在实例上的$options方法上找到子组件的定义
+             let Ctor = vm.$options.components[tag];
+             // 通过构造函数 去创建组件 生成虚拟节点
+              return createComponent(vm, tag, data, key, children, Ctor)
+        }
+    }
+
+    function createComponent(vm, tag, data, key, children, Ctor) {
+        // 如果传的是对象 需要 通过 extend 变成构造函数, 继承父组件方法和属性等
+        if (isObject(Ctor)) {       
+            Ctor = vm.$options._base.extend(Ctor)
+        }
+
+        // 定义的 组件内部的生命周期
+        data.hook = {
+            init(vnode) {
+                // 当前组件的实例, 虚拟节点上 componentInstance 表示的就是vue实例
+                let child = vnode.componentInstance = new Ctor({ _isComponent: true });
+                // 组件的挂载 
+                child.$mount();
+            }
+            // ....
+        }
+
+        let componentObj = {
+            Ctor, // 组件的构造函数 方便子组件调用其他方法
+            children // 子组件children 是插槽
+        }
+
+        // 组件内部会自动调用 extend; 创建虚拟节点; 组件是没有孩子children, 只有插槽
+        return vnode(`vue-component-${Ctor.cid}-${tag}`, data, key, undefined, undefined, componentObj)
+    }
+
+    2.在子组件 执行init的时候 是需要挂载的,都会执行 _update 所以每个组件都会创建Watcher. 需要手动调用$mount, 因为他们options上没有传el;所以自定义了组件生命周期,要先内部调用.
+
+
+    3. 渲染会调用 patch方法 把结果 放在 $el上;
+
+    4.总结: Vue.component || 子组件声明 ==> 传的options 内部执行Vue.extend继承, 通过组件原型链的合并策略 ==> 渲染的时候,判断是组件, 去创建组件,就会new构造函数 ==> 就会调用init初始化, 然后拿到构造函数实例,放到虚拟节点 vnode.componentInstance上 还有手动调用$mount方法; 就会把真实dom放到实例上==> 最后渲染的时候 返回el即可
+    
+    // 所以父子组件渲染,是拿整个vnode去渲染,有子节点递归调用.生命周期执行顺序: 都是创建,先父后子,再挂载, 先子后父 最后 输出el
+
+注意⚠️:
+组件渲染 会调用当前组件对于的构造函数产生一个实例,
+每个组件使用 都会调用Vue.extend,创建构造函数
+实例化子组件,会将当前options 和用户定义选项合并 mergeOptions
+通过创建实例,内部会调用 子类_init() 内部会创建渲染watcher 将渲染结果放到 vm.$el上 = 组件渲染结果
 
 ```

@@ -25,7 +25,6 @@ export function initMixin(Vue) {
          * 当被 子类继承了以后 ,constructor 指向的就是子类了
          */
 
-
         vm.$options = mergeOptions(vm.constructor.options, options)
 
         callHook(vm, 'beforeCreate');
@@ -59,8 +58,10 @@ export function initMixin(Vue) {
             if (!template && el) {
                 template = el.outerHTML
             }
+
             const render = compileToFunction(template)
             // 将template 转化为 render方法 vue1.0 是字符串正则  vue2.0 是虚拟dom
+            console.log("render------", render)
             options.render = render;
         }
         // options.render()
