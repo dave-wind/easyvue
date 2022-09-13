@@ -35,8 +35,21 @@ export function lifecycleMixin(Vue) {
     Vue.prototype._update = function (vnode) {
         const vm = this;
         console.log("vnode---", vnode)
-        // 通过虚拟节点 渲染真实的dom, 去替换 真实的el
-        vm.$el = patch(vm.$el, vnode);
+
+        const prevVnode = vm._vnode; // 保存上一次虚拟节点为了实现对比
+
+        // 挂载在实例上 , 每new 一个实例, vm都会一直存在
+        vm._vnode = vnode; // 真实渲染内容
+
+        // 第一次渲染
+        if (!prevVnode) {
+            // 通过虚拟节点 渲染真实的dom, 去替换 真实的el
+            vm.$el = patch(vm.$el, vnode);
+        }else {
+            // 拿到保存的上一次 真实内容 去对比
+            vm.$el =  patch(prevVnode, vnode);
+        }
+
 
     }
 }
