@@ -965,6 +965,8 @@
   // 渲染成真实dom
   function patch(oldVnode, vnode) {
     // 1.判断是更新还是渲染
+    debugger;
+
     if (!oldVnode) {
       // 这个是组件的挂载 又叫 空挂载  empty mount (likely as component) 
       console.log("组件vnode---", vnode);
@@ -998,7 +1000,7 @@
             oldVnode.el.texContent = vnode.text;
           }
         } // 标签一致 且不是文本; 修改属性
-        // 让旧dom节点 赋值给 新的虚拟节点 el
+        // 让旧dom节点 赋值给 新的虚拟节点 el (复用)
 
 
         var _el = vnode.el = oldVnode.el; // 更新属性
@@ -1007,7 +1009,8 @@
         updateProperties(vnode, oldVnode.data); // 比对子节点
 
         var oldChildren = oldVnode.children || [];
-        var newChildren = vnode.children || []; // 新老都有儿子, 需要比对里面儿子
+        var newChildren = vnode.children || [];
+        console.log("oldChildren---", oldChildren); // 新老都有儿子, 需要比对里面儿子
 
         if (oldChildren.length > 0 && newChildren.length > 0) {
           updateChildren(_el, oldChildren, newChildren);
@@ -1111,6 +1114,9 @@
 
           oldChildren[moveIndex] = undefined;
           parent.insertBefore(moveVnode.el, oldStartVnode.el); // 放在头指针前面
+          // 标签一致还要比较子元素
+
+          patch(moveVnode, newStartVnode);
         } // 最后 移动指针 准备下次循环
 
 
@@ -1148,6 +1154,7 @@
         var child = oldChildren[_i];
 
         if (child !== undefined) {
+          console.log("child.el------", child.el);
           parent.removeChild(child.el);
         }
       }
@@ -1548,6 +1555,42 @@
     initAssetRegister(Vue);
   }
 
+  function diffDemo(Vue) {
+    // dom 1
+    var vm1 = new Vue({
+      data: {
+        name: 'hello'
+      }
+    });
+    var render1 = compileToFunction("<div id=\"app\" a=\"1\" style=\"background:blue\">\n        <div style=\"background:pink;\" key=\"A\">A</div>\n        <div style=\"background:yellow;\" key=\"B\">B</div>\n        <div style=\"background:green;\" key=\"C\">C</div>\n    </div>");
+    var vnode = render1.call(vm1);
+    var el = createElm(vnode);
+    console.log("el 渲染结果:----", el);
+    document.body.appendChild(el); //dom2
+
+    var vm2 = new Vue({
+      data: {
+        name: 'world',
+        age: 18
+      }
+    }); // let render2 = compileToFunction('<div id="aaa" b="2" style="color:red;">{{name}} {{age}}</div>');
+
+    var render2 = compileToFunction("<div id=\"aaa\" b=\"2\">\n        <div style=\"background:pink;\" key=\"A\">A</div>\n        <div style=\"background:yellow;\" key=\"B\">B</div>\n        <div style=\"background:blue;\" key=\"E\">E</div>\n    </div>");
+    var newVnode = render2.call(vm2);
+    console.log("newVnode--", newVnode); //  dom2 替换 dom1
+
+    setTimeout(function () {
+      patch(vnode, newVnode);
+    }, 1500);
+  }
+  /**
+   *  <div style="background:red;" key="Q">Q</div>
+          <div style="background:pink;" key="A">A</div>
+          <div style="background:blue;" key="F">F</div>
+          <div style="background:green;" key="C">C</div>
+          <div style="background:#ccc;" key="N">N</div>
+   */
+
   function Vue(options) {
     // 调用了 Vue 的 init 原型方法
     this._init(options);
@@ -1557,6 +1600,8 @@
   renderMixin(Vue);
   lifecycleMixin(Vue);
   initGlobalAPI(Vue); // dif test
+
+  diffDemo(Vue);
 
   return Vue;
 

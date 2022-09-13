@@ -1,7 +1,7 @@
 // 渲染成真实dom
 export function patch(oldVnode, vnode) {
     // 1.判断是更新还是渲染
-
+    debugger
     if (!oldVnode) {
         // 这个是组件的挂载 又叫 空挂载  empty mount (likely as component) 
         console.log("组件vnode---", vnode)
@@ -39,7 +39,7 @@ export function patch(oldVnode, vnode) {
 
             // 标签一致 且不是文本; 修改属性
 
-            // 让旧dom节点 赋值给 新的虚拟节点 el
+            // 让旧dom节点 赋值给 新的虚拟节点 el (复用)
             let el = vnode.el = oldVnode.el;
             // 更新属性
             updateProperties(vnode, oldVnode.data);
@@ -48,7 +48,7 @@ export function patch(oldVnode, vnode) {
             // 比对子节点
             let oldChildren = oldVnode.children || [];
             let newChildren = vnode.children || [];
-
+            console.log("oldChildren---", oldChildren)
             // 新老都有儿子, 需要比对里面儿子
             if (oldChildren.length > 0 && newChildren.length > 0) {
                 updateChildren(el, oldChildren, newChildren);
@@ -105,7 +105,7 @@ function updateChildren(parent, oldChildren, newChildren) {
 
     // 暴力比对 用的 把老的vnode 做成以key为键的对象
 
-    let map = makeIndexByKey(oldChildren); 
+    let map = makeIndexByKey(oldChildren);
 
     // 在比对过程中 新老虚拟几点 有一方循环完毕 就结束
     while (oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex) {
@@ -165,17 +165,18 @@ function updateChildren(parent, oldChildren, newChildren) {
                 // 为了避免循环塌陷,还要移动完以后, 设置为空
                 oldChildren[moveIndex] = undefined;
                 parent.insertBefore(moveVnode.el, oldStartVnode.el);// 放在头指针前面
-
+                // 标签一致还要比较子元素
+                patch(moveVnode,newStartVnode)
             }
             // 最后 移动指针 准备下次循环
             newStartVnode = newChildren[++newStartIndex];
-
         }
 
     }
 
     // 新vnode 数量 大于 旧vnode
     if (newStartIndex <= newEndIndex) {
+
         for (let i = newStartIndex; i <= newEndIndex; i++) {
 
             // 正常情况下 向后找元素 到最后一位 为null 如果向前插入;  newChildren[newEndIndex + 1] 为首元素, 取其eldom元素
@@ -202,6 +203,7 @@ function updateChildren(parent, oldChildren, newChildren) {
         for (let i = oldStartIndex; i <= oldEndIndex; i++) {
             let child = oldChildren[i];
             if (child !== undefined) {
+                console.log("child.el------", child.el)
                 parent.removeChild(child.el);
             }
         }

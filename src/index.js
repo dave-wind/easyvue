@@ -3,7 +3,7 @@ import { renderMixin } from "./render";
 import { lifecycleMixin } from "./lifecycle";
 import { initGlobalAPI } from "./initGlobalAPI/index"
 
-// import {diffDemo} from "./diff-test";
+import {diffDemo} from "./diff-test";
 
 function Vue(options) {
 
@@ -20,6 +20,6 @@ initGlobalAPI(Vue)
 
 
 // dif test
-// diffDemo(Vue)
+diffDemo(Vue)
 
 export default Vue;

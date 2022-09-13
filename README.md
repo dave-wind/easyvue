@@ -242,17 +242,93 @@ Vue.component 会被注册成一个全局方法;调用也是全局组件;
 ```
 
 
-#### Dom-diff
+#### Vue2 Dom-diff
 
 ```js
 
 Vue dom-diff 主要是平级比对,采用的是双指针 对旧vnode和新vnode进行比对, 准确说 是四个指针,四个节点, 旧头指针,尾指针, 新vnode的头和尾; 以及旧新的头尾节点.
 
+patch方法,是一个把旧节点和新虚拟节点 对比 生成真实dom的方法
+1.首先 if 判断 是否为组件, 如果没有旧vnode 那么认为是组件 会 空挂载 return dom
+2. 如果是真实html标签,含有nodeType 就用 oldvnode 的parent.insertBefore 插入元素; 替换删除 老dom
+3.如果不是真实标签 那继续走虚拟节点思路:
+    第一判断 俩虚拟节点 标签是否一致,不一致 直接替换
+    第二 判断是否为文本, 是文本 在内部对比, 文本不一样 替换掉文本
+    第三 ,复用节点,vnode.el = oldVnode.el 去更新属性, 如果都有子节点,调用updateChildren,
+    第四, 如果只有新节点有children, 旧节点没有, 直接循环新节点替换,转化为真实dom,  el.appendChild(createElm(child));
+    第五, 如果老的有children, 新没有 直接全部置空
+4.调用 updateChildren 方法步骤:
+       // 第一个指针指向oldVnode 开头
+    let oldStartIndex = 0;
+    let oldStartVnode = oldChildren[0];
+    // 第二个指针指向oldVnode 尾部
+    let oldEndIndex = oldChildren.length - 1;
+    let oldEndVnode = oldChildren[oldEndIndex];
+
+    // 第三个指针指向 newVnode 开头
+    let newStartIndex = 0;
+    let newStartVnode = newChildren[0];
+     // 第四个指针指向 newVnode 尾部
+    let newEndIndex = newChildren.length - 1;
+    let newEndVnode = newChildren[newEndIndex];
+
+    A.优化向后插入元素情况,表示俩虚拟节点,开头节点相同 对比
+     A B C D
+     A B C E
+     ++ oldStartIndex,++newStartIndex,指针直到D和E,发现节点不同,新旧头节点不同,尾节点也不同,头尾都不同, 所以采用暴力比对,发现E节点在旧vnode没有 直接在旧startIndex前插入元素(因为oldstartIndex 一直在移动循环), 最后while循环完, , oldStartIndex <= oldEndIndex 时,删除 不必要的oldChid 元素 D 即可
+
+
+    B.优化向前插入元素情况,结尾节点相同 对比, 倒着比
+
+    C. 头移尾 情况,表示开头,结尾都不相同,那旧vnode开头 和 新vnode 结尾对比, 当标签和key一样,就把A插入到后面,然后指针移动, ++oldStartIndex, 新vnode 尾指针 从右往左, --newEndIndex;主要是移动旧vnode;后续就是 B与B比对 一样 C与C比对一样 结束 只移动dom一次
+       A B C
+       B C A
+
+     D.尾移头 一样;把旧vnode 最后一个D 移动到 旧vnode前面
+       A B C D
+       D A B C
+    parent.insertBefore(oldEndVnode.el, oldStartVnode.el);
+    移动完以后 移动指针, --oldEndIndex; ++newStartIndex
+
+    E.暴力对比 针对以上都不同的情况:
+        现根据老节点key,做一个映射表,拿新的虚拟节点去映射表查找,如果可以查到,则进行移动(移到头指针前面位置)如果找不到就在头指针插入新元素)
+
+        A B C E
+        Q A C F
+
+      过程表示: 
+      1.新vnode里的Q在 旧vnode的keymap里找不到 直接 插入到startIndex指针也就是A之前:
+      [Q]A B C E
+        .. A C F
+          ++ newStartIndex 为 1 指向A
+      2. 发现A与A相同; 旧指针也++i 指向 B,新指针指向C
+        [Q][A] B C E
+             ..C F
+
+       3. 如上发现,头与头节点,头与尾,尾与头都不同,走暴力对比, 且C能在 旧vnodekeyMap里找到; 所以要复用该vnode,就是moveVnode 走到了暴力对比else逻辑; 为了防范数组塌陷,把 C设置为undefined; 再把当前C 移动到旧指针之前,如果有子内容 比如text等 需要patch 比较子元素;最后 新指针,新节点指向下一个 F;
+         [Q][A][C]B undefined E
+                ..F
+        4.F同理; 最后新vnode 循环完; 如果oldStartIndex <= oldEndIndex; 需要循环 oldChildren  去remove 那些child,得   Q A C F 
+
+      // map是oldvnode 根据key做的映射对象, 拿到新vnode 去查找, 找不到 旧在oldvnode节点前插入
+      let moveIndex = map[newStartVnode.key];
+       if (!moveIndex) { 
+           parent.insertBefore(createElm(newStartVnode), oldStartVnode.el);
+       } 
+       // 如果找的到 就复用该vnode
+       else { 
+            let moveVnode = oldChildren[moveIndex];
+            // 为了避免循环塌陷,还要移动完以后, 设置为空
+            oldChildren[moveIndex] = undefined;
+            parent.insertBefore(moveVnode.el, oldStartVnode.el);// 放在头指针前面
+            patch(moveVnode,newStartVnode)
+         }
+        // 最后 移动指针 准备下次循环
+        newStartVnode = newChildren[++newStartIndex];   
 
 
 
-
-key的重要性:
+#key的重要性:
 // 旧
 <li>a</li>
 <li>b</li>
@@ -267,7 +343,7 @@ key的重要性:
 如上, 没有key,会复用,会做3次dom操作,但是如果有key 就会在基于老的vdom上位移 元素 提高性能.
 
 #key索引
-如果key 有 用索引, 当dom 进行序列操作,比如倒叙操作等 但key还是按索引排列, 前后索引一样,标签一样就会去比对孩子children 就回去替换孩子,
+如果key 有 用索引, 当dom 进行序列操作,比如倒叙操作等 但key还是按索引排列, 前后索引一样,标签一样就会去比对孩子children 就会去替换孩子,
 但是key用唯一id 比如如上图, 他只需要移动dom2次位移 即可实现. dom-diff 是基于 旧vnode 去生成 dom,无需重新创建dom,操作去移动dom,多的dom删掉即可.
 
 
