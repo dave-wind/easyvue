@@ -326,6 +326,37 @@ patch方法,是一个把旧节点和新虚拟节点 对比 生成真实dom的方
         // 最后 移动指针 准备下次循环
         newStartVnode = newChildren[++newStartIndex];   
 
+#注在比对当中,因为避免循环塌陷,移动完以后设置为空的节点; 当俩vnode对比节点相同后移会遇到undefined的节点, 需要开头做判断 跳过 undefined节点; 还要考虑到反向操作;尾移头那种 即可;
+    if (!oldStartVnode) {
+            oldStartVnode = oldChildren[++oldStartIndex];
+    } else if (!oldEndVnode) { // 反向操作
+            oldEndVnode = oldChildren[--oldEndIndex]
+    } else ...
+
+
+#最后在 lifecycle.js _update方法里;加入判断是否为初次渲染和非初次渲染需要在 实例vm上挂载一个 _vnode; 保证下次 vnode对比 即可:
+
+Vue.prototype._update = function(vnode) {
+    const vm = this;
+    const prevVnode = vm._vnode; // 保存上一次虚拟节点为了实现对比
+     vm._vnode = vnode; // 真实渲染内容 <div></div>...
+
+    // 第一次 prevVnode没有值 走初次渲染
+     if (!prevVnode) {
+            // 通过虚拟节点 渲染真实的dom, 去替换 真实的el
+            vm.$el = patch(vm.$el, vnode);
+        }else {
+            // 拿到保存的上一次 真实内容 去对比
+            vm.$el =  patch(prevVnode, vnode);
+     }
+}
+
+注:
+vm._vnode.parent = vm.$vnode 
+$vnode 是注册的组件, _vnode为组件真实渲染的内容 div ...
+
+
+
 
 
 #key的重要性:

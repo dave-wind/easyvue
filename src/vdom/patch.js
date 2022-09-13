@@ -1,7 +1,6 @@
 // 渲染成真实dom
 export function patch(oldVnode, vnode) {
     // 1.判断是更新还是渲染
-    debugger
     if (!oldVnode) {
         // 这个是组件的挂载 又叫 空挂载  empty mount (likely as component) 
         console.log("组件vnode---", vnode)
@@ -117,7 +116,7 @@ function updateChildren(parent, oldChildren, newChildren) {
             oldEndVnode = oldChildren[--oldEndIndex]
         }
         // 优化向后插入的情况
-        if (isSameVnode(oldStartVnode, newStartVnode)) {
+        else if (isSameVnode(oldStartVnode, newStartVnode)) {
             // 如果是同一节点 就需要比对这个元素的属性; 递归深度比较
             patch(oldStartVnode, newStartVnode);
             // 循环完 下一次 跟进
@@ -165,8 +164,8 @@ function updateChildren(parent, oldChildren, newChildren) {
                 // 为了避免循环塌陷,还要移动完以后, 设置为空
                 oldChildren[moveIndex] = undefined;
                 parent.insertBefore(moveVnode.el, oldStartVnode.el);// 放在头指针前面
-                // 标签一致还要比较子元素
-                patch(moveVnode,newStartVnode)
+                // 标签一致 还要比较子元素
+                patch(moveVnode, newStartVnode)
             }
             // 最后 移动指针 准备下次循环
             newStartVnode = newChildren[++newStartIndex];
@@ -198,7 +197,7 @@ function updateChildren(parent, oldChildren, newChildren) {
         }
     }
 
-    // 删除旧dom的一些 操作
+    // 如果当前老的开始 和老的结束中间 还有节点;  删除这些节点
     if (oldStartIndex <= oldEndIndex) {
         for (let i = oldStartIndex; i <= oldEndIndex; i++) {
             let child = oldChildren[i];
