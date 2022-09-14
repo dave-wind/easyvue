@@ -34,7 +34,6 @@ export function mountComponent(vm, el) {
 export function lifecycleMixin(Vue) {
     Vue.prototype._update = function (vnode) {
         const vm = this;
-        console.log("vnode---", vnode)
 
         const prevVnode = vm._vnode; // 保存上一次虚拟节点为了实现对比
 
@@ -45,9 +44,9 @@ export function lifecycleMixin(Vue) {
         if (!prevVnode) {
             // 通过虚拟节点 渲染真实的dom, 去替换 真实的el
             vm.$el = patch(vm.$el, vnode);
-        }else {
+        } else {
             // 拿到保存的上一次 真实内容 去对比
-            vm.$el =  patch(prevVnode, vnode);
+            vm.$el = patch(prevVnode, vnode);
         }
 
 

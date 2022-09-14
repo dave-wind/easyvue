@@ -10,7 +10,6 @@ export function diffDemo(Vue) {
     let render1 = compileToFunction(`<div id="app" a="1" style="background:blue">
         <div style="background:pink;" key="A">A</div>
         <div style="background:yellow;" key="B">B</div>
-        <div style="background:green;" key="C">C</div>
     </div>`);
     let vnode = render1.call(vm1);
 
@@ -27,9 +26,9 @@ export function diffDemo(Vue) {
     })
     // let render2 = compileToFunction('<div id="aaa" b="2" style="color:red;">{{name}} {{age}}</div>');
     let render2 = compileToFunction(`<div id="aaa" b="2">
+        <div style="background:green;" key="C">C</div>
         <div style="background:pink;" key="A">A</div>
         <div style="background:yellow;" key="B">B</div>
-        <div style="background:blue;" key="E">E</div>
     </div>`);
     let newVnode = render2.call(vm2);
     console.log("newVnode--", newVnode)
@@ -39,12 +38,3 @@ export function diffDemo(Vue) {
         patch(vnode, newVnode)
     }, 1500)
 }
-
-
-/**
- *  <div style="background:red;" key="Q">Q</div>
-        <div style="background:pink;" key="A">A</div>
-        <div style="background:blue;" key="F">F</div>
-        <div style="background:green;" key="C">C</div>
-        <div style="background:#ccc;" key="N">N</div>
- */

@@ -2,6 +2,7 @@ import { initMixin } from "./init";
 import { renderMixin } from "./render";
 import { lifecycleMixin } from "./lifecycle";
 import { initGlobalAPI } from "./initGlobalAPI/index"
+import { stateMixin } from "./state";
 
 // import {diffDemo} from "./diff-test";
 
@@ -17,6 +18,9 @@ lifecycleMixin(Vue)
 
 
 initGlobalAPI(Vue)
+
+
+stateMixin(Vue);
 
 
 // dif test

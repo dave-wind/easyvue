@@ -1,6 +1,7 @@
 // 渲染成真实dom
 export function patch(oldVnode, vnode) {
-    // 1.判断是更新还是渲染
+    // debugger
+
     if (!oldVnode) {
         // 这个是组件的挂载 又叫 空挂载  empty mount (likely as component) 
         console.log("组件vnode---", vnode)
@@ -29,17 +30,25 @@ export function patch(oldVnode, vnode) {
                 oldVnode.el.parentNode.replaceChild(createElm(vnode), oldVnode.el);
             }
 
+
+
+            // debugger
             // 如果没有标签, 只是文本, 内容不一致的话
             if (!oldVnode.tag) {
+                // debugger
                 if (oldVnode.text !== vnode.text) {
+                    // 这句不写 不修改...
+                    oldVnode.el.nodeValue = vnode.text;
                     oldVnode.el.texContent = vnode.text;
                 }
             }
 
+
             // 标签一致 且不是文本; 修改属性
 
             // 让旧dom节点 赋值给 新的虚拟节点 el (复用)
-            let el = vnode.el = oldVnode.el;
+            const el = vnode.el = oldVnode.el;
+
             // 更新属性
             updateProperties(vnode, oldVnode.data);
 
@@ -47,7 +56,6 @@ export function patch(oldVnode, vnode) {
             // 比对子节点
             let oldChildren = oldVnode.children || [];
             let newChildren = vnode.children || [];
-            console.log("oldChildren---", oldChildren)
             // 新老都有儿子, 需要比对里面儿子
             if (oldChildren.length > 0 && newChildren.length > 0) {
                 updateChildren(el, oldChildren, newChildren);
@@ -65,10 +73,9 @@ export function patch(oldVnode, vnode) {
                 // 老的有孩子, 新的没有孩子; 直接置空
                 el.innerHTML = '';
             }
-
         }
     }
-
+    return vnode.el;
 }
 
 function isSameVnode(oldVnode, newVnode) {

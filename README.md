@@ -379,3 +379,44 @@ $vnode 是注册的组件, _vnode为组件真实渲染的内容 div ...
 
 
 ```
+
+
+#### watcher的原理
+
+本质是调用是基于$watch的 里的new Watcher 对数据改变进行响应
+```js
+
+第一 watch 监听数据变化 一般有几种写法
+
+ watch:{
+     name: [{
+                handler: 'handler',
+                sync: true
+        }],
+        name2(newVal,oldVal) {
+
+        },
+         name3: {
+             handler(newVal,oldVal){
+
+             },
+            sync: true // 每次改变都会触发
+        }
+ }
+
+ this.$watch('xx',()=>{})
+
+有 数组型, 函数型, 对象型 还有直接调用$watch 
+
+1: 是对参数的格式化操作 把其都转为 key handler的形式
+如上 拿到 key为name, handler 为一个 callback
+
+2. 调用 new Watcher(vm,key,cb,options)
+
+给 user 调用的 wathcer 加上标识 表示 是user的wathcer 
+options.user = true;
+
+3. Watcher 类里
+
+
+```

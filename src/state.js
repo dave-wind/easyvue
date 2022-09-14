@@ -1,5 +1,6 @@
 import { observe } from "./observer/index"
-import { proxy } from "./util/index"
+import Watcher from "./observer/watcher";
+import { isObject, proxy } from "./util/index"
 /**
  * 
  * @param {*} vm 传入实例
@@ -25,7 +26,7 @@ export function initState(vm) {
     }
 
     if (opts.watch) {
-        initWatch(vm);
+        initWatch(vm, opts.watch);
     }
 
 }
@@ -60,4 +61,68 @@ function initMethods() { }
 
 function initComputed() { }
 
-function initWatch() { }
+// watch 原理是通过Watcher 实现
+function initWatch(vm, watch) {
+    for (let key in watch) {
+        const handler = watch[key]
+        if (Array.isArray(handler)) {
+            for (let i = 0; i < handler.length; i++) {
+                // 用户传递的是数组 循环 依次创建
+                createWatcher(vm, key, handler[i])
+            }
+        } else {
+            createWatcher(vm, key, handler)
+        }
+    }
+}
+
+/** watch 几种方式
+ watch: {
+            name: [{
+                handler: 'handler',
+                sync: true
+            }],
+            name2(newVal,oldVal) {
+
+            },
+            name: {
+                handler(newVal,oldVal){
+
+                },
+                sync: true // 每次改变都会触发
+            }
+        },
+
+ */
+
+
+function createWatcher(vm, key, handler, options) {
+
+    // 参数的格式化操作
+
+    if (isObject(handler)) {
+        // options 默认是{} 放到 ioptions
+        options = handler;
+        // 对象取 handler
+        handler = handler.handler;
+    }
+
+    if (typeof handler === 'string') {
+        // 从methods 上找 方法
+        handler = vm.$options.methods[handler]
+    }
+    //
+
+    // watch原理 是基于$watch的
+    return vm.$watch(key, handler, options)
+}
+
+
+export function stateMixin(Vue) {
+    Vue.prototype.$watch = function (exprOrFn, cb, options) {
+        const vm = this;
+        // 表示当前是用户自己写的 watcher; watcher是分 渲染watcher 和 用户自写的watcher的
+        options.user = true;
+        new Watcher(vm, exprOrFn, cb, options);
+    }
+}

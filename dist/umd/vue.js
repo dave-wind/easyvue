@@ -479,6 +479,189 @@
     });
   }
 
+  var callbacks = [];
+  var waiting = false;
+
+  function flushCallback() {
+    waiting = false;
+    var copies = callbacks.slice(0); // 置空
+
+    callbacks.length = 0;
+
+    for (var i = 0; i < copies.length; i++) {
+      copies[i]();
+    }
+  }
+
+  var timerFunc;
+
+  if (typeof Promise !== 'undefined') {
+    var p = Promise.resolve();
+
+    timerFunc = function timerFunc() {
+      p.then(flushCallback);
+    };
+  } else if (typeof setImmediate !== 'undefined') {
+    timerFunc = function timerFunc() {
+      setImmediate(flushCallback);
+    };
+  } else {
+    timerFunc = function timerFunc() {
+      setTimeout(flushCallback, 0);
+    };
+  } // 项目初始化的时候 ,代码里写的 set属性, 或者用户自己执行$nextTick 都会往队列里塞cb;  这里需要拦截,因为代码里面会循环调用 队列里的 callback;不然会多次调用
+
+
+  function nextTick(cb, ctx) {
+
+
+    function fun() {
+      if (cb) {
+        cb.call(ctx);
+      }
+    }
+
+    callbacks.push(fun); // 这里为了避免 异步函数 还没 被调用完 一种节流机制
+
+    if (waiting === false) {
+      waiting = true; // 执行并清空
+
+      timerFunc();
+    } // 当没有cb 可以提供Promise形式
+
+    /**
+     * vm.$nextTick().then(() => { })
+     */
+
+
+    if (!cb && typeof Promise !== 'undefined') {
+      console.log("参数---", Array.prototype.slice.apply(arguments));
+      return new Promise(function (resolve) {
+        resolve();
+      });
+    }
+  }
+
+  var quene = []; //队列存放watcher
+
+  var has = {};
+
+  function flushSchedularQueue() {
+    console.log("flushSchedularQueue--");
+    quene.forEach(function (watcher) {
+      return watcher.run();
+    }); // 清空 队列 和 挂载对象
+
+    quene = [];
+    has = {};
+  }
+
+  function queueWatcher(watcher) {
+    var id = watcher.id; // 同一个watcher 需要过滤;
+
+    if (!has[id]) {
+      quene.push(watcher);
+      has[id] = true; // 单线程 等同步执行完以后 callback, 在下一个事件队列 执行;
+
+      nextTick(flushSchedularQueue, watcher);
+    }
+  }
+
+  var id = 0;
+
+  var Watcher = /*#__PURE__*/function () {
+    function Watcher(vm, exprOrFn, callback, options) {
+      _classCallCheck(this, Watcher);
+
+      this.id = id++;
+      this.vm = vm;
+      this.callback = callback;
+      this.options = options; // 这里要区分 渲染watcher 和 用户user
+
+      this.user = options.user;
+
+      if (typeof exprOrFn === 'function') {
+        this.getter = exprOrFn;
+      } else {
+        //  可能是字符串 watcher: {'obj.name.name'}
+        // 将getter方法 封装成 取vm实例下的取值函数
+        this.getter = function () {
+          var patch = exprOrFn.split(".");
+          var val = vm; // 循环取值 xxx.xx.x 
+
+          for (var i = 0; i < patch.length; i++) {
+            val = val[patch[i]];
+          }
+
+          return val;
+        };
+      } // dep 相关
+
+
+      this.depsId = new Set(); // 唯一性 去重
+
+      this.deps = []; // watcher 需要存的 上一次的值;
+
+      this.value = this.get();
+    }
+
+    _createClass(Watcher, [{
+      key: "addDep",
+      value: function addDep(dep) {
+        var id = dep.id; // 解决watcher 重复存放的问题
+
+        if (!this.depsId.has(id)) {
+          this.depsId.add(id);
+          this.deps.push(dep); // 调用 dep 方法;把watcher 存到dep里 (避免重复存放)
+
+          dep.addSub(this);
+        }
+      }
+    }, {
+      key: "get",
+      value: function get() {
+        // 依赖收集; watcher 和 user watcher 都会从这里收集依赖
+        pushTarget(this); // 把watcher 存起来
+
+        var val = this.getter.call(this.vm); // 渲染watcher的执行 || 用户写的watcher执行
+
+        popTarget(); // 移除watcher
+
+        return val;
+      } // 有可能会被 多次调用 update 所以要过滤
+
+    }, {
+      key: "update",
+      value: function update() {
+        // 同步watcher 取消 queue 直接执行; 改变几次 调用几次;
+        if (this.sync) {
+          this.run();
+        } else {
+          // 等待着
+          queueWatcher(this);
+        }
+      }
+    }, {
+      key: "run",
+      value: function run() {
+        var oldValue = this.value; // 第一次渲染的值
+
+        var newValue = this.get(); // 更新value
+
+        this.value = newValue; // 表示当前是user写的 watcher
+
+        if (this.user) {
+          this.callback.call(this.vm, newValue, oldValue);
+        } else {
+          // 内部渲染watcher
+          this.get();
+        }
+      }
+    }]);
+
+    return Watcher;
+  }();
+
   /**
    * 
    * @param {*} vm 传入实例
@@ -498,7 +681,9 @@
 
     if (opts.computed) ;
 
-    if (opts.watch) ;
+    if (opts.watch) {
+      initWatch(vm, opts.watch);
+    }
   }
 
 
@@ -516,6 +701,69 @@
 
 
     observe(data);
+  }
+
+
+  function initWatch(vm, watch) {
+    for (var key in watch) {
+      var handler = watch[key];
+
+      if (Array.isArray(handler)) {
+        for (var i = 0; i < handler.length; i++) {
+          // 用户传递的是数组 循环 依次创建
+          createWatcher(vm, key, handler[i]);
+        }
+      } else {
+        createWatcher(vm, key, handler);
+      }
+    }
+  }
+  /** watch 几种方式
+   watch: {
+              name: [{
+                  handler: 'handler',
+                  sync: true
+              }],
+              name2(newVal,oldVal) {
+
+              },
+              name: {
+                  handler(newVal,oldVal){
+
+                  },
+                  sync: true // 每次改变都会触发
+              }
+          },
+
+   */
+
+
+  function createWatcher(vm, key, handler, options) {
+    // 参数的格式化操作
+    if (isObject(handler)) {
+      // options 默认是{} 放到 ioptions
+      options = handler; // 对象取 handler
+
+      handler = handler.handler;
+    }
+
+    if (typeof handler === 'string') {
+      // 从methods 上找 方法
+      handler = vm.$options.methods[handler];
+    } //
+    // watch原理 是基于$watch的
+
+
+    return vm.$watch(key, handler, options);
+  }
+
+  function stateMixin(Vue) {
+    Vue.prototype.$watch = function (exprOrFn, cb, options) {
+      var vm = this; // 表示当前是用户自己写的 watcher; watcher是分 渲染watcher 和 用户自写的watcher的
+
+      options.user = true;
+      new Watcher(vm, exprOrFn, cb, options);
+    };
   }
 
   var ncname = "[a-zA-Z_][\\-\\.0-9_a-zA-Z]*"; // abc-aaa
@@ -816,157 +1064,9 @@
     return renderFn;
   }
 
-  var callbacks = [];
-  var waiting = false;
-
-  function flushCallback() {
-    waiting = false;
-    var copies = callbacks.slice(0); // 置空
-
-    callbacks.length = 0;
-
-    for (var i = 0; i < copies.length; i++) {
-      copies[i]();
-    }
-  }
-
-  var timerFunc;
-
-  if (typeof Promise !== 'undefined') {
-    var p = Promise.resolve();
-
-    timerFunc = function timerFunc() {
-      p.then(flushCallback);
-    };
-  } else if (typeof setImmediate !== 'undefined') {
-    timerFunc = function timerFunc() {
-      setImmediate(flushCallback);
-    };
-  } else {
-    timerFunc = function timerFunc() {
-      setTimeout(flushCallback, 0);
-    };
-  } // 项目初始化的时候 ,代码里写的 set属性, 或者用户自己执行$nextTick 都会往队列里塞cb;  这里需要拦截,因为代码里面会循环调用 队列里的 callback;不然会多次调用
-
-
-  function nextTick(cb, ctx) {
-
-
-    function fun() {
-      if (cb) {
-        cb.call(ctx);
-      }
-    }
-
-    callbacks.push(fun); // 这里为了避免 异步函数 还没 被调用完 一种节流机制
-
-    if (waiting === false) {
-      waiting = true; // 执行并清空
-
-      timerFunc();
-    } // 当没有cb 可以提供Promise形式
-
-    /**
-     * vm.$nextTick().then(() => { })
-     */
-
-
-    if (!cb && typeof Promise !== 'undefined') {
-      console.log("参数---", Array.prototype.slice.apply(arguments));
-      return new Promise(function (resolve) {
-        resolve();
-      });
-    }
-  }
-
-  var quene = []; //队列存放watcher
-
-  var has = {};
-
-  function flushSchedularQueue() {
-    console.log("flushSchedularQueue--");
-    quene.forEach(function (watcher) {
-      return watcher.run();
-    }); // 清空 队列 和 挂载对象
-
-    quene = [];
-    has = {};
-  }
-
-  function queueWatcher(watcher) {
-    var id = watcher.id; // 同一个watcher 需要过滤;
-
-    if (!has[id]) {
-      quene.push(watcher);
-      has[id] = true; // 单线程 等同步执行完以后 callback, 在下一个事件队列 执行;
-
-      nextTick(flushSchedularQueue, watcher);
-    }
-  }
-
-  var id = 0;
-
-  var Watcher = /*#__PURE__*/function () {
-    function Watcher(vm, exprOrFn, callback, options) {
-      _classCallCheck(this, Watcher);
-
-      this.id = id++;
-      this.vm = vm;
-      this.callback = callback;
-      this.options = options;
-      this.getter = exprOrFn; // dep 相关
-
-      this.depsId = new Set(); // 唯一性 去重
-
-      this.deps = [];
-      this.get();
-    }
-
-    _createClass(Watcher, [{
-      key: "addDep",
-      value: function addDep(dep) {
-        var id = dep.id; // 解决watcher 重复存放的问题
-
-        if (!this.depsId.has(id)) {
-          this.depsId.add(id);
-          this.deps.push(dep); // 调用 dep 方法;把watcher 存到dep里 (避免重复存放)
-
-          dep.addSub(this);
-        }
-      }
-    }, {
-      key: "get",
-      value: function get() {
-        pushTarget(this); // 把watcher 存起来
-
-        this.getter(); // 渲染watcher的执行
-
-        popTarget(); // 移除watcher
-      } // 有可能会被 多次调用 update 所以要过滤
-
-    }, {
-      key: "update",
-      value: function update() {
-        // 等待着
-        // this.get()
-        // console.log("update---------")
-        queueWatcher(this);
-      }
-    }, {
-      key: "run",
-      value: function run() {
-        this.get();
-      }
-    }]);
-
-    return Watcher;
-  }();
-
   // 渲染成真实dom
   function patch(oldVnode, vnode) {
-    // 1.判断是更新还是渲染
-    debugger;
-
+    // debugger
     if (!oldVnode) {
       // 这个是组件的挂载 又叫 空挂载  empty mount (likely as component) 
       console.log("组件vnode---", vnode);
@@ -992,11 +1092,15 @@
         if (oldVnode.tag !== vnode.tag) {
           // createElm(vnode) 生成最新的dom 去替换老的 el
           oldVnode.el.parentNode.replaceChild(createElm(vnode), oldVnode.el);
-        } // 如果没有标签, 只是文本, 内容不一致的话
+        } // debugger
+        // 如果没有标签, 只是文本, 内容不一致的话
 
 
         if (!oldVnode.tag) {
+          // debugger
           if (oldVnode.text !== vnode.text) {
+            // 这句不写 不修改...
+            oldVnode.el.nodeValue = vnode.text;
             oldVnode.el.texContent = vnode.text;
           }
         } // 标签一致 且不是文本; 修改属性
@@ -1009,8 +1113,7 @@
         updateProperties(vnode, oldVnode.data); // 比对子节点
 
         var oldChildren = oldVnode.children || [];
-        var newChildren = vnode.children || [];
-        console.log("oldChildren---", oldChildren); // 新老都有儿子, 需要比对里面儿子
+        var newChildren = vnode.children || []; // 新老都有儿子, 需要比对里面儿子
 
         if (oldChildren.length > 0 && newChildren.length > 0) {
           updateChildren(_el, oldChildren, newChildren);
@@ -1027,6 +1130,8 @@
         }
       }
     }
+
+    return vnode.el;
   }
 
   function isSameVnode(oldVnode, newVnode) {
@@ -1066,9 +1171,7 @@
         // 反向操作
         oldEndVnode = oldChildren[--oldEndIndex];
       } // 优化向后插入的情况
-
-
-      if (isSameVnode(oldStartVnode, newStartVnode)) {
+      else if (isSameVnode(oldStartVnode, newStartVnode)) {
         // 如果是同一节点 就需要比对这个元素的属性; 递归深度比较
         patch(oldStartVnode, newStartVnode); // 循环完 下一次 跟进
 
@@ -1114,7 +1217,7 @@
 
           oldChildren[moveIndex] = undefined;
           parent.insertBefore(moveVnode.el, oldStartVnode.el); // 放在头指针前面
-          // 标签一致还要比较子元素
+          // 标签一致 还要比较子元素
 
           patch(moveVnode, newStartVnode);
         } // 最后 移动指针 准备下次循环
@@ -1146,7 +1249,7 @@
           parent.insertBefore(createElm(newChildren[i]), insertNode);
         }
       }
-    } // 删除旧dom的一些 操作
+    } // 如果当前老的开始 和老的结束中间 还有节点;  删除这些节点
 
 
     if (oldStartIndex <= oldEndIndex) {
@@ -1273,7 +1376,6 @@
   function lifecycleMixin(Vue) {
     Vue.prototype._update = function (vnode) {
       var vm = this;
-      console.log("vnode---", vnode);
       var prevVnode = vm._vnode; // 保存上一次虚拟节点为了实现对比
       // 挂载在实例上 , 每new 一个实例, vm都会一直存在
 
@@ -1555,42 +1657,6 @@
     initAssetRegister(Vue);
   }
 
-  function diffDemo(Vue) {
-    // dom 1
-    var vm1 = new Vue({
-      data: {
-        name: 'hello'
-      }
-    });
-    var render1 = compileToFunction("<div id=\"app\" a=\"1\" style=\"background:blue\">\n        <div style=\"background:pink;\" key=\"A\">A</div>\n        <div style=\"background:yellow;\" key=\"B\">B</div>\n        <div style=\"background:green;\" key=\"C\">C</div>\n    </div>");
-    var vnode = render1.call(vm1);
-    var el = createElm(vnode);
-    console.log("el 渲染结果:----", el);
-    document.body.appendChild(el); //dom2
-
-    var vm2 = new Vue({
-      data: {
-        name: 'world',
-        age: 18
-      }
-    }); // let render2 = compileToFunction('<div id="aaa" b="2" style="color:red;">{{name}} {{age}}</div>');
-
-    var render2 = compileToFunction("<div id=\"aaa\" b=\"2\">\n        <div style=\"background:pink;\" key=\"A\">A</div>\n        <div style=\"background:yellow;\" key=\"B\">B</div>\n        <div style=\"background:blue;\" key=\"E\">E</div>\n    </div>");
-    var newVnode = render2.call(vm2);
-    console.log("newVnode--", newVnode); //  dom2 替换 dom1
-
-    setTimeout(function () {
-      patch(vnode, newVnode);
-    }, 1500);
-  }
-  /**
-   *  <div style="background:red;" key="Q">Q</div>
-          <div style="background:pink;" key="A">A</div>
-          <div style="background:blue;" key="F">F</div>
-          <div style="background:green;" key="C">C</div>
-          <div style="background:#ccc;" key="N">N</div>
-   */
-
   function Vue(options) {
     // 调用了 Vue 的 init 原型方法
     this._init(options);
@@ -1599,9 +1665,8 @@
   initMixin$1(Vue);
   renderMixin(Vue);
   lifecycleMixin(Vue);
-  initGlobalAPI(Vue); // dif test
-
-  diffDemo(Vue);
+  initGlobalAPI(Vue);
+  stateMixin(Vue); // dif test
 
   return Vue;
 

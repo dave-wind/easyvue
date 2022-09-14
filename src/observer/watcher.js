@@ -9,13 +9,34 @@ class Watcher {
         this.vm = vm;
         this.callback = callback;
         this.options = options;
-        this.getter = exprOrFn;
+
+        // 这里要区分 渲染watcher 和 用户user
+
+        this.user = options.user;
+
+        if (typeof exprOrFn === 'function') {
+            this.getter = exprOrFn;
+
+        } else { //  可能是字符串 watcher: {'obj.name.name'}
+
+            // 将getter方法 封装成 取vm实例下的取值函数
+            this.getter = function () {
+                let patch = exprOrFn.split(".");
+                let val = vm;
+                // 循环取值 xxx.xx.x 
+                for (let i = 0; i < patch.length; i++) {
+                    val = val[patch[i]];
+                }
+                return val;
+            }
+        }
 
         // dep 相关
         this.depsId = new Set() // 唯一性 去重
         this.deps = [];
 
-        this.get();
+        // watcher 需要存的 上一次的值;
+        this.value = this.get();
 
     }
     addDep(dep) {
@@ -31,22 +52,42 @@ class Watcher {
     }
 
     get() {
+        // 依赖收集; watcher 和 user watcher 都会从这里收集依赖
         pushTarget(this); // 把watcher 存起来
-        this.getter(); // 渲染watcher的执行
+        let val = this.getter.call(this.vm); // 渲染watcher的执行 || 用户写的watcher执行
 
         popTarget(); // 移除watcher
+
+        return val;
     }
 
     // 有可能会被 多次调用 update 所以要过滤
     update() {
-        // 等待着
-        // this.get()
-        // console.log("update---------")
-        queueWatcher(this);
+        // 同步watcher 取消 queue 直接执行; 改变几次 调用几次;
+        if (this.sync) {
+            this.run();
+        } else {
+            // 等待着
+            queueWatcher(this);
+        }
+
+
     }
 
     run() {
-        this.get();
+        let oldValue = this.value; // 第一次渲染的值
+        let newValue = this.get();
+
+        // 更新value
+        this.value = newValue;
+
+        // 表示当前是user写的 watcher
+        if (this.user) {
+            this.callback.call(this.vm, newValue, oldValue)
+        } else { // 内部渲染watcher
+            this.get();
+        }
+
     }
 }
 
