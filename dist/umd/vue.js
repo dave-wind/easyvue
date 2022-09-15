@@ -575,8 +575,9 @@
 
       this.id = id++;
       this.vm = vm;
-      this.callback = callback;
-      this.options = options; // 这里要区分 渲染watcher 和 用户user
+      this.callback = callback; // 默认情况下 只有 渲染 watcher options 为true
+
+      this.options = options; // 所以 user 在渲染watcher下 为 undefined 这里要区分 渲染watcher 和 用户user
 
       this.user = options.user;
 
@@ -1660,12 +1661,14 @@
   function Vue(options) {
     // 调用了 Vue 的 init 原型方法
     this._init(options);
-  }
+  } // init 数据劫持 合并options
+
 
   initMixin$1(Vue);
   renderMixin(Vue);
   lifecycleMixin(Vue);
-  initGlobalAPI(Vue);
+  initGlobalAPI(Vue); // $watcher 声明
+
   stateMixin(Vue); // dif test
 
   return Vue;

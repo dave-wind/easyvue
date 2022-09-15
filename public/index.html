@@ -10,6 +10,7 @@
 <body>
     <div id="app">
         {{msg}}
+        {{msg2}}
     </div>
 </body>
 <script src="/dist/umd/vue.js"></script>
@@ -23,22 +24,22 @@
             return {
                 arr: [[1, 2, 3]],
                 msg: 'Hello Vue',
-                msg2: '',
+                msg2: 'xx',
                 name: 'dave'
             }
         },
-        watch: {
-            name: [{
-                handler: 'handler',
-                sync: true
-            }
-            ],
-            msg: {
-                handler(newVal, oldVal) {
-                    console.log('watcher-----', newVal, oldVal)
-                }
-            }
-        },
+        // watch: {
+        //     name: [{
+        //         handler: 'handler',
+        //         sync: true
+        //     }
+        //     ],
+        //     msg: {
+        //         handler(newVal, oldVal) {
+        //             console.log('watcher-----', newVal, oldVal)
+        //         }
+        //     }
+        // },
         methods: {
             handler(newVal, oldVal) {
                 console.log('watcher-----123', newVal, oldVal)
@@ -47,6 +48,7 @@
         mounted() {
             setTimeout(function () {
                 vm.msg = '123';
+                // vm.msg2 = '456';
             }, 1000)
         },
         // components: {

@@ -8,9 +8,10 @@ class Watcher {
         this.id = id++;
         this.vm = vm;
         this.callback = callback;
+        // 默认情况下 只有 渲染 watcher options 为true
         this.options = options;
 
-        // 这里要区分 渲染watcher 和 用户user
+        // 所以 user 在渲染watcher下 为 undefined 这里要区分 渲染watcher 和 用户user
 
         this.user = options.user;
 

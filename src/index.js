@@ -11,15 +11,18 @@ function Vue(options) {
     // 调用了 Vue 的 init 原型方法
     this._init(options)
 }
-
+// init 数据劫持 合并options
 initMixin(Vue)
+
 renderMixin(Vue)
+
 lifecycleMixin(Vue)
 
 
 initGlobalAPI(Vue)
 
 
+// $watcher 声明
 stateMixin(Vue);
 
 

@@ -241,6 +241,34 @@ Vue.component 会被注册成一个全局方法;调用也是全局组件;
 
 ```
 
+#### 数据劫持 && 依赖收集
+
+```js
+
+new Vue 的时候 内部会调用 _init方法,把options里传的data 进行initData 初始化
+1. 对data上所有的key 进行代理,转移取值 把data 转移到_data上 这样直接访问vm.xxx
+
+2. MVVM模式数据劫持,调用Object.defineProperty;  new Observer(data); 内部区别对象和数组进行数据劫持.
+    a.对象情况下 直接调用 walk方法, 对对象每一个key进行深度遍历,如果对象下的值还是对象 需要进行递归调用observe 继续劫持. set方法也需要判断,新值是对象 也需要递归调用.
+
+    b. new Dep() Vue里数据劫持 data里每一个对象对应一个dep,dep主要用来做发布订阅的, 在访问属性get时,收集watcher ,在修改时 调用wathcer update方法 更新视图.
+
+    c. 当我们初始化渲染时候, 会 new Watcher  内部会创建一个watcher,存到栈当中, 当我们 访问vm实例任何属性时候, 都会走get方法, 判断 Dep.target 是否存在, 存在就需要调用 dep.depend方法:
+    depend() {
+        Dep.target.addDep(this) // this是dep实例 为后面用
+    }
+    这里的 Dep.target 就是watcher实例, 调用其addDep方法,顾名思义就是存dep, 在Watcher 类内部 也会去去重 存dep;最后调用dep 去存一个watcher; 
+
+    d. 在只有一个组件实例情况下,相当于 dep是关联一个个不重复的属性,然后存放的一个watcher 俩者都避免重复,就会避免重复渲染; 而数据劫持在其中 冲当观察者,当依赖存好以后, 去set 更新属性时, 通知dep notify 发布, 就会调用watcher 去update; 
+
+    e. 当我们 new Watcher 渲染页面的时候, 都会访问data里的属性, 那时候已经把依赖收集起来了, 这里的watcher用的是渲染watcher收集的, 当我们set 修改属性的时候, 就直接去拿出 watcher 去更新视图了
+ 
+
+```
+
+
+
+
 
 #### Vue2 Dom-diff
 
