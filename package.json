@@ -16,5 +16,8 @@
     "cross-env": "^7.0.3",
     "rollup": "^2.78.1",
     "rollup-plugin-serve": "^2.0.1"
+  },
+  "dependencies": {
+    "vue-template-compiler": "^2.7.10"
   }
 }

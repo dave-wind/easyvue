@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dom Diff</title>
+</head>
+
+<body>
+    <div id="app">
+
+        <div v-click-out-side="blur">
+            <input />
+            <div v-show="visible">click</div>
+        </div>
+    </div>
+</body>
+<script src="/dist/umd/vue.js"></script>
+<script>
+
+    // Vue.directive()
+    let vm = new Vue({
+        el: "#app",
+        directives: { // 局部指令
+            clickOutSide: {
+                bind(el, bindings, vnode, oldVnode) { // 未挂载之前绑定完指令
+                    console.log(el, 'el为当前元素')
+                    // bindings.expression  为指令方法名
+                    // vnode.context 为vm 实例
+                    // 这里可以做dom 或者 addEventListener 等操作
+                    el.handler = (e) => {
+                        if (!el.contains(e.target)) {
+
+                            // 执行 methods 方法
+                            vnode.context[bindings.expression]();
+                        }
+                    }
+                    document.addEventListener('click', el.handler)
+                },
+                inserted(el, bindings, vnode, oldVnode) { // 已插入挂载
+
+                },
+                update(el, bindings, vnode, oldVnode) { // 数据未更新之前
+
+                },
+                componentUpdated(el, bindings, vnode, oldVnode) { // 数据更新
+
+                },
+                unbind(el, bindings, vnode, oldVnode) { // 卸载
+
+                    // 可以把el 作为全局值用
+                    document.removeEventListener('click', el.handler);
+                },
+            }
+        },
+        data() {
+            return {
+                visible: true
+            }
+        },
+        methods: {
+            blur() {
+                this.visible = false
+            }
+        }
+    })
+</script>
+
+</html>
