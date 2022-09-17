@@ -414,7 +414,15 @@ $vnode 是注册的组件, _vnode为组件真实渲染的内容 div ...
 本质是调用是基于$watch的 里的new Watcher 对数据改变进行响应
 ```js
 
-第一 watch 监听数据变化 一般有几种写法
+ Watcher 在 observer/watcher.js 里
+ watcher里做了什么?
+ 1.id 记录不同的watcher用的
+ 2.
+class Watcher {
+
+}
+
+watch 监听数据变化 一般有几种写法
 
  watch:{
      name: [{
@@ -428,7 +436,7 @@ $vnode 是注册的组件, _vnode为组件真实渲染的内容 div ...
              handler(newVal,oldVal){
 
              },
-            sync: true // 每次改变都会触发
+            sync: true // 每次改变都会触发, 为同步标记
         }
  }
 
@@ -439,12 +447,116 @@ $vnode 是注册的组件, _vnode为组件真实渲染的内容 div ...
 1: 是对参数的格式化操作 把其都转为 key handler的形式
 如上 拿到 key为name, handler 为一个 callback
 
-2. 调用 new Watcher(vm,key,cb,options)
+2. 调用 new Watcher(vm,exprOrFn,cb,options)
 
 给 user 调用的 wathcer 加上标识 表示 是user的wathcer 
 options.user = true;
 
-3. Watcher 类里
+3.一般 new Wathcer 就会调用 getter方法 里面会进行依赖收集; 所以需要判断exprOrFn, 
+    a.如果是渲染wathcer,exprOrFn 类型为 function 直接调用
+    b.如果是用户写的watcher 穿的exprOrFn为字符串,所以我们需要把 getter方法 封装成 取vm实例下属性的取值函数
+    eg: 'obj.user.name'
+
+    this.getter = funcion() {
+         let patch = exprOrFn.split(".");
+            let val = vm;
+              // 循环取值 xxx.xx.x 
+            for (let i = 0; i < patch.length; i++) {
+                    val = val[patch[i]];
+           }
+           return val;
+    }
+
+4.取到的值 就会成为oldVal 当下一次 watcher update的时候 就会触发用户写的 callback 把 新值 和老值 都传递过去, 如果标记sync 为true 则会修改一次,触发一次.不会异步渲染;
+
+```
 
 
+#### Computed 计算属性原理
+
+
+```js
+1.根据用户传入的 options computed 参数 进行 initComputed初始化
+会循环遍历 computed 传入的对象每一个属性 都会挂载一个 new watcher,并且通过 Object.defineProperty属性描述器 把每一个key 的定义的实例上,取值走get,设置走set;
+
+2.但是有问题,这样定义每次取值,都会造成 用户写的计算属性函数重新执行,想设计一个缓存机制,给 属性描述器的get方法定义了一个高阶函数,AOP切片:
+Object.defineProperty(target, key, sharedPropwetyDefinition)
+sharedPropwetyDefinition.get = createComputedGetter(key)
+function createComputedGetter(key) {
+    // 添加了缓存机制
+    return function () {
+        // 拿到了刚才的watcher
+        let watcher = this._computedWatcher[key];
+        if (watcher.dirty) { // 默认第一次取值, 为true
+
+            watcher.evaluate();
+            console.log("dirty--", watcher.value)
+        }
+        return watcher.value;
+    }
+}
+设置切片目的就是 当watcher实例 dirty为true 会去获取值,,取完值,设置为false 用户再取值 就走缓存
+
+3.第一次走watcher get方法时,就已经把当前watcher存起来了, 再做取值操作,这样就把 依赖的属性和当前的计算属性watcher对应起来了, 相当于 msg 和name也收集了introduce属性收集了, 所以不管谁变了都会造成计算属性的更新操作 update
+
+
+4. update 不需要做其他操作,只需要把 dirty 设置为true 就会走之前老的逻辑 重新取值
+
+computed: {
+        introduce() {
+           return this.msg + ' ' + this.name
+       }
+}
+
+class Watcher {
+
+    get() {
+
+        pushTarget(this); // 先把watcher 存起来
+        let val = this.getter.call(this.vm); // 渲染watcher的执行 || 用户写的watcher执行 || 计算属性函数执行
+
+        popTarget(); // 移除watcher
+
+        return val;
+    }
+}
+
+
+5. 综上, 当我们定义计算属性的时候, 内部会创建 计算属性watcher, 当我们执行计算属性方法的时候, 就会去访问 this实例里的变量,就会走数据劫持,就会收集计算属性的依赖, 内部依赖不更新会设置缓存,多次取值会直接拿缓存值, 当内部依赖改变的时候 触发 watcher update时候,内部改变dirty状态, 就会重新get()新值 重新计算并返回
+
+
+
+6. 计算属性收集依赖
+
+写到这里, 计算属性虽然可以触发,打印结果也变了,但是 页面并不会触发渲染,因为我们并没有把 渲染watcher 和 属性关联起来
+
+Dep类中 有个 队列是专门存放 Watcher的, 每次添加一个都会pop 在剔除一个,当计算属性watcher被踢出了, 指针就会指向前一个
+[渲染wather,计算属性watcher]
+
+因为调用 Watcher get()方法的时候, 会调用 popTarget;
+
+let stack = []
+
+function popTarget() {
+    stack.pop();
+    Dep.target = stack[stack.length - 1];
+}
+
+所以我们调用计算属性方法时候,需要判断是否还有 渲染Watcher Dep.target, 如果存在 让其计算属性watcher存放的 deps 循环调用 去存放 渲染watcher, 最后异步更新.
+
+这里强调一下 假如计算属性依赖100个属性,100个属性同步改变100次, 但是渲染只会是一次, 因为是内部调用 $nextTick 异步渲染!
+
+
+class Watcher {
+
+    depend() {
+        // 如果还有deps 依赖的属性,循环他们
+        let index = this.deps.length;
+        while(index--) {
+            // 调用把每一个dep属性  都去存放当前 watcher
+            // 这里又回到了 Watcher 和dep 依赖关系那里
+            this.deps[index].depend()
+        }
+    }
+}
 ```

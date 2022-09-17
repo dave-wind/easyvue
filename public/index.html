@@ -9,8 +9,7 @@
 
 <body>
     <div id="app">
-        {{msg}}
-        {{msg2}}
+        {{introduce}}
     </div>
 </body>
 <script src="/dist/umd/vue.js"></script>
@@ -26,6 +25,11 @@
                 msg: 'Hello Vue',
                 msg2: 'xx',
                 name: 'dave'
+            }
+        },
+        computed: {
+            introduce() {
+                return this.msg + ' ' + this.name
             }
         },
         // watch: {
@@ -46,10 +50,6 @@
             }
         },
         mounted() {
-            setTimeout(function () {
-                vm.msg = '123';
-                // vm.msg2 = '456';
-            }, 1000)
         },
         // components: {
         //     'my-component': {
@@ -65,7 +65,12 @@
         //     }
         // },
     });
-
+ 
+    console.log("vm.introduce-",vm.introduce)
+    setTimeout(function () {
+        vm.msg = '1231111';
+        console.log(">>>>>>>",vm.introduce)
+    }, 2000);
     setTimeout(() => {
         // console.log('arr--', vm.arr[1], "外部");
         // demo: 异步操作,手动更新

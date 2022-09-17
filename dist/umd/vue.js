@@ -577,7 +577,11 @@
       this.vm = vm;
       this.callback = callback; // 默认情况下 只有 渲染 watcher options 为true
 
-      this.options = options; // 所以 user 在渲染watcher下 为 undefined 这里要区分 渲染watcher 和 用户user
+      this.options = options; // 用来标记 计算属性的
+
+      this.lazy = options.lazy; // 用于计算属性 缓存的
+
+      this.dirty = this.lazy; // 所以 user 在渲染watcher下 为 undefined 这里要区分 渲染watcher 和 用户user
 
       this.user = options.user;
 
@@ -601,15 +605,16 @@
 
       this.depsId = new Set(); // 唯一性 去重
 
-      this.deps = []; // watcher 需要存的 上一次的值;
+      this.deps = []; // watcher 需要存的 上一次的值; 调用get方法会渲染watcher; 计算属性不调用
 
-      this.value = this.get();
+      console.log("this.lazy--", this.lazy);
+      this.value = this.lazy ? undefined : this.get();
     }
 
     _createClass(Watcher, [{
       key: "addDep",
       value: function addDep(dep) {
-        var id = dep.id; // 解决watcher 重复存放的问题
+        var id = dep.id; // 解决watcher 重复存放的问题,就是解决 重复渲染问题
 
         if (!this.depsId.has(id)) {
           this.depsId.add(id);
@@ -624,11 +629,18 @@
         // 依赖收集; watcher 和 user watcher 都会从这里收集依赖
         pushTarget(this); // 把watcher 存起来
 
-        var val = this.getter.call(this.vm); // 渲染watcher的执行 || 用户写的watcher执行
+        var val = this.getter.call(this.vm); // 渲染watcher的执行 || 用户写的watcher执行 || 计算属性函数执行
 
         popTarget(); // 移除watcher
 
         return val;
+      }
+    }, {
+      key: "evaluate",
+      value: function evaluate() {
+        this.value = this.get(); // 取完值 赋值false 就会拿缓存值
+
+        this.dirty = false;
       } // 有可能会被 多次调用 update 所以要过滤
 
     }, {
@@ -637,6 +649,9 @@
         // 同步watcher 取消 queue 直接执行; 改变几次 调用几次;
         if (this.sync) {
           this.run();
+        } else if (this.lazy) {
+          // 表示的是计算属性 依赖的值 改变了 
+          this.dirty = true;
         } else {
           // 等待着
           queueWatcher(this);
@@ -656,6 +671,17 @@
         } else {
           // 内部渲染watcher
           this.get();
+        }
+      }
+    }, {
+      key: "depend",
+      value: function depend() {
+        // 如果还有deps 依赖的属性,循环他们
+        var index = this.deps.length;
+
+        while (index--) {
+          // 调用把每一个dep属性  都去存放当前 watcher
+          this.deps[index].depend();
         }
       }
     }]);
@@ -680,7 +706,9 @@
 
     if (opts.methods) ;
 
-    if (opts.computed) ;
+    if (opts.computed) {
+      initComputed(vm, opts.computed);
+    }
 
     if (opts.watch) {
       initWatch(vm, opts.watch);
@@ -703,6 +731,63 @@
 
     observe(data);
   }
+
+
+  function initComputed(vm, computed) {
+    // _computedWatchers 存放着所有的计算属性对应的watcher
+    var watchers = vm._computedWatcher = {};
+
+    for (var key in computed) {
+      var userDef = computed[key]; // 获取用户定义的函数 || 对象
+
+      var getter = typeof userDef === 'function' ? userDef : userDef.get;
+      watchers[key] = new Watcher(vm, getter, function () {}, {
+        lazy: true
+      }); // 计算数学可以直接通过vm来进行取值,所以将属性定义到实例上
+
+      defineComputed(vm, key, userDef);
+    }
+  } // 全局对象 描述器
+
+
+  var sharedPropwetyDefinition = {
+    enumerable: true,
+    configurable: true,
+    get: function get() {}
+  };
+
+  function defineComputed(target, key, userDef) {
+    // 需要添加缓存效果 不可以直接获取
+    if (typeof userDef === 'function') {
+      // sharedPropwetyDefinition.get = userDef;
+      sharedPropwetyDefinition.get = createComputedGetter(key);
+    } else {
+      sharedPropwetyDefinition.get = createComputedGetter(key);
+      sharedPropwetyDefinition.set = userDef.set || {};
+    }
+
+    Object.defineProperty(target, key, sharedPropwetyDefinition);
+  }
+
+  function createComputedGetter(key) {
+    // 添加了缓存机制
+    return function () {
+      // 拿到了刚才的watcher
+      var watcher = this._computedWatcher[key];
+
+      if (watcher.dirty) {
+        // 默认第一次取值, 为true
+        watcher.evaluate();
+      } // 如果还存在渲染watcher 调用depend
+
+
+      if (Dep.target) {
+        watcher.depend();
+      }
+
+      return watcher.value;
+    };
+  } // watch 原理是通过Watcher 实现
 
 
   function initWatch(vm, watch) {

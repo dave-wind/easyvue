@@ -1,6 +1,9 @@
 import { observe } from "./observer/index"
 import Watcher from "./observer/watcher";
-import { isObject, proxy } from "./util/index"
+import { isObject, proxy } from "./util/index";
+import Dep from "./observer/dep";
+
+
 /**
  * 
  * @param {*} vm 传入实例
@@ -22,7 +25,7 @@ export function initState(vm) {
         initMethods(vm);
     }
     if (opts.computed) {
-        initComputed(vm);
+        initComputed(vm, opts.computed);
     }
 
     if (opts.watch) {
@@ -59,7 +62,64 @@ function initData(vm) {
 
 function initMethods() { }
 
-function initComputed() { }
+// 内部原理都是通过watcher来实现的
+function initComputed(vm, computed) {
+    // _computedWatchers 存放着所有的计算属性对应的watcher
+    const watchers = vm._computedWatcher = {}
+
+    for (let key in computed) {
+        const userDef = computed[key];  // 获取用户定义的函数 || 对象
+        const getter = typeof userDef === 'function' ? userDef : userDef.get
+
+        watchers[key] = new Watcher(vm, getter, () => { }, { lazy: true });
+
+
+        // 计算数学可以直接通过vm来进行取值,所以将属性定义到实例上
+        defineComputed(vm, key, userDef)
+    }
+
+}
+
+// 全局对象 描述器
+const sharedPropwetyDefinition = {
+    enumerable: true,
+    configurable: true,
+    get: () => { },
+};
+
+function defineComputed(target, key, userDef) {
+    // 需要添加缓存效果 不可以直接获取
+    if (typeof userDef === 'function') {
+        // sharedPropwetyDefinition.get = userDef;
+        sharedPropwetyDefinition.get = createComputedGetter(key);
+    } else {
+        sharedPropwetyDefinition.get = createComputedGetter(key);
+        sharedPropwetyDefinition.set = userDef.set || {}
+    }
+    Object.defineProperty(target, key, sharedPropwetyDefinition)
+}
+
+function createComputedGetter(key) {
+    // 添加了缓存机制
+    return function () {
+        // 拿到了刚才的watcher
+        let watcher = this._computedWatcher[key];
+        if (watcher.dirty) { // 默认第一次取值, 为true
+
+            watcher.evaluate();
+        }
+
+        // 如果还存在渲染watcher 调用depend
+        if (Dep.target) {
+            watcher.depend();
+        }
+
+        return watcher.value;
+    }
+}
+
+
+
 
 // watch 原理是通过Watcher 实现
 function initWatch(vm, watch) {
