@@ -3,6 +3,15 @@ export function isObject(data) {
 }
 
 
+export function isNative(Ctor) {
+    return typeof Ctor === 'function' && /native code/.test(Ctor.toString())
+}
+
+
+export function noop(a, b, c) { }
+
+export const isIOS = (UA && /iphone|ipad|ipod|ios/.test(UA));
+
 export function def(data, key, value) {
     Object.defineProperty(data, key, {
         enumerable: false, // 不可枚举

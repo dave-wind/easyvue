@@ -1,3 +1,6 @@
+import { isNative, isIOS, noop } from "../util/index";
+
+
 let callbacks = [];
 let waiting = false;
 
@@ -19,6 +22,21 @@ if (typeof Promise !== 'undefined') {
     const p = Promise.resolve();
     timerFunc = function () {
         p.then(flushCallback)
+        if (isIOS) {
+            setTimeout(noop)
+        }
+    }
+
+} else if (typeof MutationObserver !== 'undefined') {
+    let counter = 1;
+    const observer = new MutationObserver(flushCallback);
+    const textNode = document.createTextNode(String(counter));
+    observer.observe(textNode, {
+        characterData: true
+    });
+    timerFunc = function () {
+        counter = (counter + 1) % 2;
+        textNode.data = String(counter);
     }
 
 } else if (typeof setImmediate !== 'undefined') {
@@ -41,6 +59,8 @@ export function nextTick(cb, ctx) {
     function fun() {
         if (cb) {
             cb.call(ctx)
+        } else if (_resolve) {
+            _resolve(ctx) // 如果是promise 就执行
         }
     }
     callbacks.push(fun);
@@ -59,9 +79,8 @@ export function nextTick(cb, ctx) {
      * vm.$nextTick().then(() => { })
      */
     if (!cb && typeof Promise !== 'undefined') {
-        console.log("参数---", Array.prototype.slice.apply(arguments));
+        // console.log("参数---", Array.prototype.slice.apply(arguments));
         return new Promise(resolve => {
-            resolve()
             _resolve = resolve
         })
     }
